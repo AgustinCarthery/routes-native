@@ -1,27 +1,98 @@
-import React from 'react';
-import MapView, {Marker} from 'react-native-maps';
+import React, {useRef, useEffect, useState} from 'react';
+import MapView, {Marker, Polyline} from 'react-native-maps';
+import {useLocation} from '../hooks/useLocation';
+import {LoadingScreen} from '../screens/LoadingScreen';
+import {Fab} from './Fab';
 
-export const Map = () => {
+interface Props {
+  marker?: typeof Marker[];
+}
+
+export const Map = ({marker}: Props) => {
+  const [showPolyline, setShowPolyline] = useState(true);
+  const {
+    hasLocation,
+    initialPosition,
+    getCurrentLocation,
+    followUserLocation,
+    userLocation,
+    stopFollowUserLocation,
+    routeLines,
+  } = useLocation();
+
+  const mapViewRef = useRef<MapView>();
+  const following = useRef<boolean>(true);
+
+  useEffect(() => {
+    followUserLocation();
+    return () => {
+      stopFollowUserLocation();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!following.current) {
+      return;
+    }
+    const {latitude, longitude} = userLocation;
+    mapViewRef.current?.animateCamera({center: {latitude, longitude}});
+  }, [userLocation]);
+
+  const centerPosition = async () => {
+    const {latitude, longitude} = await getCurrentLocation();
+    following.current = true;
+    mapViewRef.current?.animateCamera({center: {latitude, longitude}});
+  };
+
+  if (!hasLocation) {
+    return <LoadingScreen />;
+  }
+
   return (
     <>
       <MapView
+        ref={el => (mapViewRef.current = el!)}
         style={{flex: 1}}
-        region={{
-          latitude: 37.78825,
-          longitude: -122.4324,
+        showsUserLocation
+        initialRegion={{
+          latitude: initialPosition.latitude,
+          longitude: initialPosition.longitude,
           latitudeDelta: 0.015,
           longitudeDelta: 0.0121,
+        }}
+        onTouchStart={() => {
+          following.current = false;
         }}>
-        <Marker
-          image={require('../assets/custom-marker.png')}
-          coordinate={{
-            latitude: 37.78825,
-            longitude: -122.4324,
-          }}
-          title="Titulo"
-          description="Descripcion"
-        />
+        {showPolyline && (
+          <Polyline
+            coordinates={routeLines}
+            strokeColor="black"
+            strokeWidth={3}
+          />
+        )}
+
+        {marker && (
+          <Marker
+            image={require('../assets/custom-marker.png')}
+            coordinate={{
+              latitude: 37.78825,
+              longitude: -122.4324,
+            }}
+            title="Titulo"
+            description="Descripcion"
+          />
+        )}
       </MapView>
+      <Fab
+        iconName="compass-outline"
+        onPress={centerPosition}
+        style={{position: 'absolute', bottom: 20, right: 20}}
+      />
+      <Fab
+        iconName="brush-outline"
+        onPress={() => setShowPolyline(!showPolyline)}
+        style={{position: 'absolute', bottom: 80, right: 20}}
+      />
     </>
   );
 };
